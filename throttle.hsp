@@ -1,0 +1,104 @@
+#include "a2d.hsp"
+#include "hspext.as"
+
+gosub *read_settings
+
+title "ThrottleControlTool v1.0.0 (COM = "+com + ")"
+
+// COMポート初期化
+	comopen com, "baud=115200 parity=N data=8 stop=1"
+	if(stat != 0){
+		dialog "COMポート初期化に失敗しました\nCOM = "+com+""
+		end
+	}
+
+//ディスプレイ関係
+	DISPX = 640
+	DISPY = 480
+
+	screen 0, DISPX, DISPY
+
+//スロットル関係
+	val = MIN_THROTTLE
+	per = 0.0
+
+	onexit gosub *onexit_
+
+//メインループ
+	font "",300
+	repeat
+		//ジョイスティックのデータGET
+		gosub *getstick
+
+		color 255,255,255 : boxf : color 0,0,0
+		color 255,0,0 : boxf 0, double(DISPY)*(1.0-per), DISPX, DISPY
+		color 0,0,0 : pos 10,70 : mes val ;: mes per
+		redraw 1 : await 10 : redraw 0
+
+		//司令を送信
+		gosub *sendData
+	loop
+	stop
+
+*getstick
+	getkey upbutton, 38
+	getkey downbutton, 40
+	getkey ctrlbutton, 17
+	getkey homebutton, 36
+	getkey endbutton, 35
+	getkey enterkey, 13
+	getkey shiftkey, 16
+
+	// Shiftkeyで上下速度が低下
+	if(shiftkey==1){
+		await 20
+	}
+
+	if(upbutton == 1){
+		val++
+		if(ctrlbutton == 1){
+			val = val + 2
+		}
+	}if(downbutton == 1){
+		val--
+		if(ctrlbutton == 2){
+			val = val - 2
+		}
+	}
+	if(ctrlbutton == 1 and homebutton==1 and endbutton==1){
+		val = MAX_THROTTLE
+	}if(enterkey==1){
+		val = MIN_THROTTLE
+	}
+	if(val < MIN_THROTTLE){
+		val = MIN_THROTTLE
+	}if(val > MAX_THROTTLE){
+		val = MAX_THROTTLE
+	}
+	per = (double(val)-MIN_THROTTLE)/(double(MAX_THROTTLE) - MIN_THROTTLE)
+	return
+	
+//送信
+*sendData
+	comput ""+val
+	if(stat == 0){
+		dialog "COM送信に失敗しました"
+		goto *onexit_
+	}
+	return
+
+*read_settings
+	notesel note
+	noteload "settings.txt"
+	noteget nl, 0
+	com = int(nl)
+	noteget nl, 1
+	MIN_THROTTLE = int(nl)
+	noteget nl, 2
+	MAX_THROTTLE = int(nl)
+
+	return
+
+*onexit_
+	comclose
+	end
